@@ -108,8 +108,14 @@ app.post('/login', async (req, res) => {
 });
 
 app.get('/profile', async (req, res) => {
-  const token = req.headers.authorization.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "No token provided" });
+  const authHeader = req.headers.authorization;
+  
+  // Check if the authorization header exists
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'No token provided or token is not properly formatted' });
+  }
+
+  const token = authHeader.split(" ")[1];
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -124,6 +130,7 @@ app.get('/profile', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 
 app.post('/apply', upload.single('resume'), async (req, res) => {
   const token = req.headers.authorization.split(" ")[1];
