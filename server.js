@@ -46,6 +46,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+
 // Routes
 app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
@@ -98,6 +99,15 @@ app.post('/login', async (req, res) => {
     console.log(token);
 
     res.json({ token, user: { id: user.rows[0].id, name: user.rows[0].name, role: user.rows[0].role } });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get('/users', async (req, res) => {
+  try {
+    const users = await pool.query('SELECT * FROM users');
+    res.json(users.rows);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
