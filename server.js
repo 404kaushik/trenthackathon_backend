@@ -76,6 +76,11 @@ app.post('/register', async (req, res) => {
   }
 });
 
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Hello from the backend!' });
+});
+
+
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
