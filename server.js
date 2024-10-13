@@ -24,11 +24,7 @@ app.use(cors({
 
 // Connect to PostgreSQL
 const pool = new Pool({
-  user: 'postgres',  // replace with your PostgreSQL username
-  host: 'localhost',
-  database: 'hackTrent',
-  password: 'postgres',  // replace with your PostgreSQL password
-  port: 5432,
+  connectionString: 'postgresql://hacktrent_user:GRE8NV8Etg5CvgMWys7D9yaDPyACLRGW@dpg-cs5o0l08fa8c73aoa4d0-a.oregon-postgres.render.com/hacktrent',
 });
 
 // JWT Secret
