@@ -10,6 +10,7 @@ const fs = require('fs');
 
 const app = express();
 const port = 5001;
+const router = express.Router();
 
 // Middleware
 app.use(cors());
@@ -29,6 +30,59 @@ const pool = new Pool({
     rejectUnauthorized: false,  // This disables certificate validation, which is fine for testing
   }
 });
+
+// Function to generate OTP
+function generateOTP() {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+
+// Function to send email
+async function sendEmail(to, otp) {
+  let transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false, // true for port 465, false for other ports
+    auth: {
+      user: "tbob5789@gmail.com", // replace with your email
+      pass: "ipzw ledx mdxb ofio", // replace with your app password
+    },
+  });
+
+  let info = await transporter.sendMail({
+    from: '"HackTrent Team" <noreply@hacktrent.com>', // Update with your sender info
+    to: to,
+    subject: "Your OTP for HackTrent Registration",
+    text: `Your OTP is: ${otp}. It will expire in 10 minutes.`,
+    html: `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+      <div style="text-align: center;">
+        <h1 style="color: #366BA1;">Welcome to HackTrent!</h1>
+        <p style="font-size: 18px; color: #555;">Your registration is almost complete!</p>
+      </div>
+      <div style="background-color: #f4f4f4; padding: 20px; border-radius: 8px; text-align: center;">
+        <h2 style="color: #333;">Your OTP Code:</h2>
+        <p style="font-size: 24px; font-weight: bold; color: #366BA1;">${otp}</p>
+        <p style="font-size: 14px; color: #555;">This code is valid for 10 minutes.</p>
+      </div>
+      <hr style="border: none; height: 1px; background-color: #ddd; margin: 20px 0;">
+      <div style="text-align: center;">
+        <p style="font-size: 14px; color: #999;">If you didn’t request this email, please ignore it.</p>
+        <p style="font-size: 14px; color: #999;">For any questions, contact us at tbob5789@gmail.com</p>
+        <p style="font-size: 12px; color: #ccc;">© 2024 HackTrent. All rights reserved.</p>
+      </div>
+    </div>
+    `,
+  });
+
+  console.log("Message sent: %s", info.messageId);
+}
+
+
+
+
+
+
 
 
 // JWT Secret
@@ -52,15 +106,16 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 
-// Routes
 app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
 
   try {
+    await pool.query('BEGIN');
+
     // Check if user already exists
     const userExist = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-
     if (userExist.rows.length > 0) {
+      await pool.query('ROLLBACK');
       return res.status(400).json({ message: 'User already exists' });
     }
 
@@ -69,15 +124,80 @@ app.post('/register', async (req, res) => {
 
     // Insert user into DB
     const newUser = await pool.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *',
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id',
       [name, email, hashedPassword]
     );
 
-    res.status(201).json(newUser.rows[0]);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    const userId = newUser.rows[0].id;
+
+    // Generate OTP
+    const otp = generateOTP();
+
+    // Store OTP in database
+    await pool.query(
+      'INSERT INTO otp (user_id, otp) VALUES ($1, $2)',
+      [userId, otp]
+    );
+
+    // Send OTP via email
+    await sendEmail(email, otp);
+
+    // Commit the transaction
+    await pool.query('COMMIT');
+
+    res.status(201).json({ message: 'User registered. Please check your email for OTP.' });
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    console.error(error);
+    res.status(500).json({ error: 'Failed to register user' });
   }
 });
+
+module.exports = router;
+
+
+app.post('/verify-otp', async (req, res) => {
+  const { email, otp } = req.body;
+
+  try {
+    console.log('Email received:', email);
+    console.log('OTP received:', otp);
+
+    // Find the user by email
+    const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (userResult.rows.length === 0) {
+      console.log('User not found');
+      return res.status(400).json({ error: 'User not found' });
+    }
+
+    const userId = userResult.rows[0].id;
+    console.log('User found:', userId);
+
+    // Check if OTP is valid and not expired
+    const otpResult = await pool.query(
+      'SELECT * FROM otp WHERE user_id = $1 AND otp = $2',
+      [userId, otp]
+    );
+    console.log('OTP query result:', otpResult.rows);
+
+    if (otpResult.rows.length === 0) {
+      console.log('Invalid OTP');
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    // OTP is valid, update user status to verified
+    await pool.query('UPDATE users SET is_verified = TRUE WHERE id = $1', [userId]);
+
+    // Delete the used OTP
+    await pool.query('DELETE FROM otp WHERE user_id = $1', [userId]);
+
+    res.json({ message: 'OTP verified successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to verify OTP' });
+  }
+});
+
 
 
 app.get('/api/test', (req, res) => {
