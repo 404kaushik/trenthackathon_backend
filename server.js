@@ -38,7 +38,7 @@ function generateOTP() {
 }
 
 
-// const SENDGRID_API_KEY = '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';
+// const SENDGRID_API_KEY = '';
 
 // // Function to send email
 // async function sendEmail(to, otp) {
