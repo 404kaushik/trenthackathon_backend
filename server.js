@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const crypto = require('crypto');
 const multer = require('multer');
 const fs = require('fs');
@@ -27,7 +28,7 @@ app.use(cors({
 const pool = new Pool({
   connectionString: 'postgresql://hacktrent_user:GRE8NV8Etg5CvgMWys7D9yaDPyACLRGW@dpg-cs5o0l08fa8c73aoa4d0-a.oregon-postgres.render.com/hacktrent',
   ssl: {
-    rejectUnauthorized: false,  // This disables certificate validation, which is fine for testing
+    rejectUnauthorized: true,  // This disables certificate validation, which is fine for testing
   }
 });
 
@@ -37,47 +38,48 @@ function generateOTP() {
 }
 
 
-// Function to send email
-async function sendEmail(to, otp) {
-  let transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false, // true for port 465, false for other ports
-    auth: {
-      user: "tbob5789@gmail.com", // replace with your email
-      pass: "ipzw ledx mdxb ofio", // replace with your app password
-    },
-  });
+// const SENDGRID_API_KEY = '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';
 
-  let info = await transporter.sendMail({
-    from: '"HackTrent Team" <noreply@hacktrent.com>', // Update with your sender info
-    to: to,
-    subject: "Your OTP for HackTrent Registration",
-    text: `Your OTP is: ${otp}. It will expire in 10 minutes.`,
-    html: `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-      <div style="text-align: center;">
-        <h1 style="color: #366BA1;">Welcome to HackTrent!</h1>
-        <p style="font-size: 18px; color: #555;">Your registration is almost complete!</p>
-      </div>
-      <div style="background-color: #f4f4f4; padding: 20px; border-radius: 8px; text-align: center;">
-        <h2 style="color: #333;">Your OTP Code:</h2>
-        <p style="font-size: 24px; font-weight: bold; color: #366BA1;">${otp}</p>
-        <p style="font-size: 14px; color: #555;">This code is valid for 10 minutes.</p>
-      </div>
-      <hr style="border: none; height: 1px; background-color: #ddd; margin: 20px 0;">
-      <div style="text-align: center;">
-        <p style="font-size: 14px; color: #999;">If you didn’t request this email, please ignore it.</p>
-        <p style="font-size: 14px; color: #999;">For any questions, contact us at tbob5789@gmail.com</p>
-        <p style="font-size: 12px; color: #ccc;">© 2024 HackTrent. All rights reserved.</p>
-      </div>
-    </div>
-    `,
-  });
+// // Function to send email
+// async function sendEmail(to, otp) {
+//   let transporter = nodemailer.createTransport({
+//     service: 'SendGrid', // Use SendGrid
+//     auth: {
+//       user: 'apikey', // This is the literal string "apikey", not your username
+//       pass: SENDGRID_API_KEY, // Use your SendGrid API Key from .env
+//     },
+//   });
 
-  console.log("Message sent: %s", info.messageId);
-}
+//   let info = await transporter.sendMail({
+//     from: '"HackTrent Team" <tbob5789@gmail.com>', // Update with your sender info
+//     to: to,
+//     subject: "Your OTP for HackTrent Registration",
+//     text: `Your OTP is: ${otp}. It will expire in 10 minutes.`,
+//     html: `
+//     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+//       <div style="text-align: center;">
+//         <h1 style="color: #366BA1;">Welcome to HackTrent!</h1>
+//         <p style="font-size: 18px; color: #555;">Your registration is almost complete!</p>
+//       </div>
+//       <div style="background-color: #f4f4f4; padding: 20px; border-radius: 8px; text-align: center;">
+//         <h2 style="color: #333;">Your OTP Code:</h2>
+//         <p style="font-size: 24px; font-weight: bold; color: #366BA1;">${otp}</p>
+//         <p style="font-size: 14px; color: #555;">This code is valid for 10 minutes.</p>
+//       </div>
+//       <hr style="border: none; height: 1px; background-color: #ddd; margin: 20px 0;">
+//       <div style="text-align: center;">
+//         <p style="font-size: 14px; color: #999;">If you didn’t request this email, please ignore it.</p>
+//         <p style="font-size: 14px; color: #999;">For any questions, contact us at tbob5789@gmail.com</p>
+//         <p style="font-size: 12px; color: #ccc;">© 2024 HackTrent. All rights reserved.</p>
+//       </div>
+//     </div>
+//     `,
+//   });
 
+//   console.log("Message sent: %s", info.messageId);
+// }
+
+// module.exports = sendEmail;
 
 
 
@@ -156,47 +158,47 @@ app.post('/register', async (req, res) => {
 module.exports = router;
 
 
-app.post('/verify-otp', async (req, res) => {
-  const { email, otp } = req.body;
+// app.post('/verify-otp', async (req, res) => {
+//   const { email, otp } = req.body;
 
-  try {
-    console.log('Email received:', email);
-    console.log('OTP received:', otp);
+//   try {
+//     console.log('Email received:', email);
+//     console.log('OTP received:', otp);
 
-    // Find the user by email
-    const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (userResult.rows.length === 0) {
-      console.log('User not found');
-      return res.status(400).json({ error: 'User not found' });
-    }
+//     // Find the user by email
+//     const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+//     if (userResult.rows.length === 0) {
+//       console.log('User not found');
+//       return res.status(400).json({ error: 'User not found' });
+//     }
 
-    const userId = userResult.rows[0].id;
-    console.log('User found:', userId);
+//     const userId = userResult.rows[0].id;
+//     console.log('User found:', userId);
 
-    // Check if OTP is valid and not expired
-    const otpResult = await pool.query(
-      'SELECT * FROM otp WHERE user_id = $1 AND otp = $2',
-      [userId, otp]
-    );
-    console.log('OTP query result:', otpResult.rows);
+//     // Check if OTP is valid and not expired
+//     const otpResult = await pool.query(
+//       'SELECT * FROM otp WHERE user_id = $1 AND otp = $2',
+//       [userId, otp]
+//     );
+//     console.log('OTP query result:', otpResult.rows);
 
-    if (otpResult.rows.length === 0) {
-      console.log('Invalid OTP');
-      return res.status(400).json({ error: 'Invalid OTP' });
-    }
+//     if (otpResult.rows.length === 0) {
+//       console.log('Invalid OTP');
+//       return res.status(400).json({ error: 'Invalid OTP' });
+//     }
 
-    // OTP is valid, update user status to verified
-    await pool.query('UPDATE users SET is_verified = TRUE WHERE id = $1', [userId]);
+//     // OTP is valid, update user status to verified
+//     await pool.query('UPDATE users SET is_verified = TRUE WHERE id = $1', [userId]);
 
-    // Delete the used OTP
-    await pool.query('DELETE FROM otp WHERE user_id = $1', [userId]);
+//     // Delete the used OTP
+//     await pool.query('DELETE FROM otp WHERE user_id = $1', [userId]);
 
-    res.json({ message: 'OTP verified successfully' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to verify OTP' });
-  }
-});
+//     res.json({ message: 'OTP verified successfully' });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ error: 'Failed to verify OTP' });
+//   }
+// });
 
 
 
