@@ -33,9 +33,9 @@ const pool = new Pool({
 });
 
 // Function to generate OTP
-function generateOTP() {
-  return crypto.randomInt(100000, 999999).toString();
-}
+// function generateOTP() {
+//   return crypto.randomInt(100000, 999999).toString();
+// }
 
 
 // const SENDGRID_API_KEY = '';
@@ -130,24 +130,25 @@ app.post('/register', async (req, res) => {
       [name, email, hashedPassword]
     );
 
-    const userId = newUser.rows[0].id;
+    // const userId = newUser.rows[0].id;
 
-    // Generate OTP
-    const otp = generateOTP();
+    // // Generate OTP
+    // const otp = generateOTP();
 
-    // Store OTP in database
-    await pool.query(
-      'INSERT INTO otp (user_id, otp) VALUES ($1, $2)',
-      [userId, otp]
-    );
+    // // Store OTP in database
+    // await pool.query(
+    //   'INSERT INTO otp (user_id, otp) VALUES ($1, $2)',
+    //   [userId, otp]
+    // );
 
-    // Send OTP via email
-    await sendEmail(email, otp);
+    // // Send OTP via email
+    // await sendEmail(email, otp);
 
     // Commit the transaction
     await pool.query('COMMIT');
 
-    res.status(201).json({ message: 'User registered. Please check your email for OTP.' });
+    // res.status(201).json({ message: 'User registered. Please check your email for OTP.' });
+    res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
     await pool.query('ROLLBACK');
     console.error(error);
