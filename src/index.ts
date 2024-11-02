@@ -277,6 +277,7 @@ app.post('/login', async (req, res) => {
         id: user.id,
         name: user.name,
         role: user.role,
+        application_status: user.application_status,
       },
     });
     return;
