@@ -1,44 +1,30 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = __importDefault(require("express"));
-const helmet_1 = __importDefault(require("helmet"));
-const cors_1 = __importDefault(require("cors"));
-const zod_1 = __importDefault(require("zod"));
-const pg_1 = require("pg");
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const multer_1 = __importDefault(require("multer"));
-const fs_1 = __importDefault(require("fs"));
-require("dotenv/config");
+import express from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
+import zod from 'zod';
+import postGres from 'pg';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import multer from 'multer';
+import fs from 'fs';
+import 'dotenv/config';
+
 // TODO: use firebase for auth or an alternative managing passwords locally is just a bad idea
 // TODO: use an orm for increased security
 // TODO: authentication as a middleware
 // TODO: use zod or an alternative for cross server client type safety.
 // Schemas
-const nameSchema = zod_1.default.string().min(1).max(50);
-const emailSchema = zod_1.default.string().email().min(1).max(50);
-const passwordSchema = zod_1.default.string().min(8).max(50);
-const userSchema = zod_1.default.object({
-    id: zod_1.default.number(),
-    email: zod_1.default.string().email(),
-    name: zod_1.default.string(),
-    password: zod_1.default.string(),
-    // TODO: This is never appended to the database???
-    role: zod_1.default.string().optional(),
-    application_status: zod_1.default.string().optional(),
+const nameSchema = zod.string().min(1).max(50);
+const emailSchema = zod.string().email().min(1).max(50);
+const passwordSchema = zod.string().min(8).max(50);
+const userSchema = zod.object({
+    id: zod.number(),
+    email: zod.string().email(),
+    name: zod.string(),
+    password: zod.string(),
+    role: zod.string().optional(),
+    application_status: zod.string().optional(),
 });
-// Error enum
-var ServerError;
-(function (ServerError) {
-    ServerError["Generic"] = "Generic";
-    ServerError["UserExists"] = "UserExists";
-    ServerError["InvalidCredentials"] = "InvalidCredentials";
-    ServerError["UserNotFound"] = "UserNotFound";
-    ServerError["ApplicationAlreadySubmitted"] = "ApplicationAlreadySubmitted";
-})(ServerError || (ServerError = {}));
 // Read Constants
 const SALT_ROUNDS = 10;
 const PORT = process.env.PORT ?? 3000;
@@ -49,17 +35,17 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (JWT_SECRET == undefined)
     throw new Error('JWT_SECRET is not defined');
 // Connect to PostgreSQL
-// TODO: Use an orm for increased security
-const pool = new pg_1.Pool({
+const pool = new postGres.Pool({
     connectionString: DB_URL,
     ssl: {
         rejectUnauthorized: true, // This disables certificate validation, which is fine for testing
     },
 });
 // Setup Express
-const app = (0, express_1.default)();
-app.use((0, helmet_1.default)());
-app.use((0, cors_1.default)({
+const app = express();
+//@ts-ignore
+app.use(helmet());
+app.use(cors({
     origin: [
         'https://trenthackathon.vercel.app/',
         'https://hacktrent.ca/',
@@ -69,12 +55,12 @@ app.use((0, cors_1.default)({
     allowedHeaders: ['Content-Type', 'Authorization'], // Allowed request headers
     credentials: true,
 }));
-app.use(express_1.default.json());
-const storage = multer_1.default.diskStorage({
+app.use(express.json());
+const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const uploadDir = 'uploads/';
-        if (!fs_1.default.existsSync(uploadDir)) {
-            fs_1.default.mkdirSync(uploadDir);
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir);
         }
         cb(null, uploadDir);
     },
@@ -82,11 +68,10 @@ const storage = multer_1.default.diskStorage({
         cb(null, Date.now() + '-' + file.originalname);
     },
 });
-const upload = (0, multer_1.default)({ storage: storage });
-// TODO: It would be good if we applied this to to the object when signing for better round trips
-const jwtPayload = zod_1.default.object({
-    id: zod_1.default.number(),
-    role: zod_1.default.string(),
+const upload = multer({ storage: storage });
+const jwtPayload = zod.object({
+    id: zod.number(),
+    role: zod.string(),
 });
 const getUser = async (authHeader) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -94,19 +79,19 @@ const getUser = async (authHeader) => {
             error: true,
             code: 401,
             message: 'No token provided or token is not properly formatted',
-            type: ServerError.InvalidCredentials,
+            type: "InvalidCredentials" /* ServerError.InvalidCredentials */,
         };
     }
     const token = authHeader.split(' ')[1];
     try {
-        const tokenPayload = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        const tokenPayload = jwt.verify(token, JWT_SECRET);
         const parsedPayload = jwtPayload.safeParse(tokenPayload);
         if (!parsedPayload.success) {
             return {
                 error: true,
                 code: 500,
                 message: 'Internal server error',
-                type: ServerError.InvalidCredentials,
+                type: "InvalidCredentials" /* ServerError.InvalidCredentials */,
             };
         }
         const payload = parsedPayload.data;
@@ -119,7 +104,7 @@ const getUser = async (authHeader) => {
                 error: true,
                 code: 404,
                 message: 'User not found',
-                type: ServerError.UserNotFound,
+                type: "UserNotFound" /* ServerError.UserNotFound */,
             };
         }
         const rawUser = userSchema.safeParse(userTable.rows[0]);
@@ -128,7 +113,7 @@ const getUser = async (authHeader) => {
                 error: true,
                 code: 500,
                 message: 'Internal server error',
-                type: ServerError.Generic,
+                type: "Generic" /* ServerError.Generic */,
             };
         }
         return {
@@ -137,14 +122,13 @@ const getUser = async (authHeader) => {
         };
     }
     catch (err) {
-        // TODO: Make this type safe
         // @ts-ignore
         if (err.name === 'TokenExpiredError') {
             return {
                 error: true,
                 code: 401,
                 message: 'Token expired',
-                type: ServerError.InvalidCredentials,
+                type: "InvalidCredentials" /* ServerError.InvalidCredentials */,
             };
         }
         else {
@@ -152,7 +136,7 @@ const getUser = async (authHeader) => {
                 error: true,
                 code: 500,
                 message: 'Internal server error',
-                type: ServerError.Generic,
+                type: "Generic" /* ServerError.Generic */,
             };
         }
     }
@@ -163,20 +147,19 @@ app.get('/', (req, res) => {
     res.send('Trent API is running');
 });
 // /register - post request to register a new user
-const registerSchema = zod_1.default.object({
+const registerSchema = zod.object({
     name: nameSchema,
     email: emailSchema,
     password: passwordSchema,
 });
 app.post('/register', async (req, res) => {
     console.log('Post request to /register');
-    // TODO: Use firebase auth so we do not need to worry about password security so much.
     // Safely extract the email and password from the request body
     const requestBody = await registerSchema.safeParseAsync(req.body);
     if (!requestBody.success) {
         res
             .status(400)
-            .json({ message: 'Invalid request body', type: ServerError.Generic });
+            .json({ message: 'Invalid request body', type: "Generic" /* ServerError.Generic */ });
         return;
     }
     const { name, email, password } = requestBody.data;
@@ -184,7 +167,6 @@ app.post('/register', async (req, res) => {
     try {
         await pool.query('BEGIN');
         // Ensure the user exists
-        // TODO: I think we should do this before the transaction as it does not cause mutation
         const userExist = await pool.query('SELECT * FROM users WHERE email = $1', [
             email,
         ]);
@@ -192,11 +174,11 @@ app.post('/register', async (req, res) => {
             await pool.query('ROLLBACK');
             res
                 .status(400)
-                .json({ message: 'User already exists', type: ServerError.UserExists });
+                .json({ message: 'User already exists', type: "UserExists" /* ServerError.UserExists */ });
             return;
         }
         // Hash the password
-        const hashedPassword = await bcryptjs_1.default.hash(password, SALT_ROUNDS);
+        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
         // Insert user into DB
         await pool.query('INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id', [name, email, hashedPassword]);
         // Commit and return
@@ -208,24 +190,23 @@ app.post('/register', async (req, res) => {
         await pool.query('ROLLBACK');
         res
             .status(500)
-            .json({ message: 'Internal server error', type: ServerError.Generic });
+            .json({ message: 'Internal server error', type: "Generic" /* ServerError.Generic */ });
         return;
     }
 });
 // /login - post request to login a user
-const loginSchema = zod_1.default.object({
+const loginSchema = zod.object({
     email: emailSchema,
     password: passwordSchema,
 });
 app.post('/login', async (req, res) => {
     console.log('Post request to /login');
-    // TODO: Use firebase auth so we do not need to worry about password security so much.
     // Safely extract the email and password from the request body
     const requestBody = await loginSchema.safeParseAsync(req.body);
     if (!requestBody.success) {
         res
             .status(400)
-            .json({ message: 'Invalid request body', type: ServerError.Generic });
+            .json({ message: 'Invalid request body', type: "Generic" /* ServerError.Generic */ });
         return;
     }
     const { email, password } = requestBody.data;
@@ -236,32 +217,31 @@ app.post('/login', async (req, res) => {
         if (userResult.rows.length <= 0) {
             res.status(400).json({
                 message: 'Invalid credentials',
-                type: ServerError.InvalidCredentials,
+                type: "InvalidCredentials" /* ServerError.InvalidCredentials */,
             });
             return;
         }
-        // TODO: using an orm would be better
         const userTable = userResult.rows[0];
         const validUser = userSchema.safeParse(userTable);
         if (!validUser.success) {
             res
                 .status(500)
-                .json({ message: 'Internal server error', type: ServerError.Generic });
+                .json({ message: 'Internal server error', type: "Generic" /* ServerError.Generic */ });
             return;
         }
         const user = validUser.data;
         // Check password
         // Compare passwords
-        const validPassword = await bcryptjs_1.default.compare(password, user.password);
+        const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             res.status(400).json({
                 message: 'Invalid credentials',
-                type: ServerError.InvalidCredentials,
+                type: "InvalidCredentials" /* ServerError.InvalidCredentials */,
             });
             return;
         }
         // Generate JWST
-        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, JWT_SECRET, {
+        const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
             expiresIn: '24h',
         });
         res.json({
@@ -270,6 +250,7 @@ app.post('/login', async (req, res) => {
                 id: user.id,
                 name: user.name,
                 role: user.role,
+                application_status: user.application_status,
             },
         });
         return;
@@ -278,7 +259,7 @@ app.post('/login', async (req, res) => {
         // Note: We drop the error as to not leak any information about the process
         res
             .status(500)
-            .json({ message: 'Internal server error', type: ServerError.Generic });
+            .json({ message: 'Internal server error', type: "Generic" /* ServerError.Generic */ });
         return;
     }
 });
@@ -307,32 +288,32 @@ app.post('/profile', async (req, res) => {
     catch (_) {
         res
             .status(500)
-            .json({ message: 'Internal server error', type: ServerError.Generic });
+            .json({ message: 'Internal server error', type: "Generic" /* ServerError.Generic */ });
         return;
     }
 });
 // /apply - post request to submit an application
-const applySchema = zod_1.default.object({
+const applySchema = zod.object({
     // TODO: Ensure types and improves restrictions
-    first_name: zod_1.default.string(),
-    last_name: zod_1.default.string(),
+    first_name: zod.string(),
+    last_name: zod.string(),
     email: emailSchema,
-    age: zod_1.default.number(),
-    gender: zod_1.default.string(),
-    pronouns: zod_1.default.string(),
-    race: zod_1.default.string(),
-    school: zod_1.default.string(),
-    major: zod_1.default.string(),
-    level_of_study: zod_1.default.string(),
-    country_of_residence: zod_1.default.string(),
-    question1: zod_1.default.string(),
-    question2: zod_1.default.string(),
-    tshirt_size: zod_1.default.string(),
-    dietary_restrictions: zod_1.default.string(),
-    agree_conduct: zod_1.default.boolean(),
-    share_info: zod_1.default.boolean(),
-    receive_emails: zod_1.default.boolean(),
-    share_resume: zod_1.default.boolean(),
+    age: zod.number(),
+    gender: zod.string(),
+    pronouns: zod.string(),
+    race: zod.string(),
+    school: zod.string(),
+    major: zod.string(),
+    level_of_study: zod.string(),
+    country_of_residence: zod.string(),
+    question1: zod.string(),
+    question2: zod.string(),
+    tshirt_size: zod.string(),
+    dietary_restrictions: zod.string(),
+    agree_conduct: zod.boolean(),
+    share_info: zod.boolean(),
+    receive_emails: zod.boolean(),
+    share_resume: zod.boolean(),
 });
 app.post('/apply', upload.single('resume'), async (req, res) => {
     console.log('Post request to /apply');
@@ -348,11 +329,10 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
         if (!parsedBody.success) {
             res
                 .status(400)
-                .json({ message: 'Invalid request body', type: ServerError.Generic });
+                .json({ message: 'Invalid request body', type: "Generic" /* ServerError.Generic */ });
             return;
         }
         const requestBody = parsedBody.data;
-        // TODO: use a hash instead of the raw filename, collisions, data visibility
         const resume_url = req.file != undefined
             ? `http://localhost:5001/uploads/${req.file.filename}`
             : null;
@@ -396,7 +376,7 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
     catch (_) {
         res
             .status(500)
-            .json({ message: 'Internal server error', type: ServerError.Generic });
+            .json({ message: 'Internal server error', type: "Generic" /* ServerError.Generic */ });
         return;
     }
 });
@@ -424,35 +404,35 @@ app.get('/dashboard', async (req, res) => {
     catch (_) {
         res
             .status(500)
-            .json({ message: 'Internal server error', type: ServerError.Generic });
+            .json({ message: 'Internal server error', type: "Generic" /* ServerError.Generic */ });
         return;
     }
 });
 // /submit-application - post request to submit an application
-const submitApplicationSchema = zod_1.default.object({
+const submitApplicationSchema = zod.object({
     // TODO: Ensure types and improves restrictions
     // TODO: What is the difference between this and apply???
-    first_name: zod_1.default.string(),
-    last_name: zod_1.default.string(),
-    email: zod_1.default.string().email(),
-    age: zod_1.default.number(),
-    gender: zod_1.default.string(),
-    pronouns: zod_1.default.string(),
-    race: zod_1.default.string(),
-    school: zod_1.default.string(),
-    major: zod_1.default.string(),
-    level_of_study: zod_1.default.string(),
-    country_of_residence: zod_1.default.string(),
-    phonenumber: zod_1.default.string(),
-    question1: zod_1.default.string(),
-    question2: zod_1.default.string(),
-    tshirt_size: zod_1.default.string(),
-    dietary_restrictions: zod_1.default.array(zod_1.default.string()),
-    agree_conduct: zod_1.default.boolean(),
-    share_info: zod_1.default.boolean(),
-    resume_url: zod_1.default.string(),
-    receive_emails: zod_1.default.boolean(),
-    share_resume: zod_1.default.boolean(),
+    first_name: zod.string(),
+    last_name: zod.string(),
+    email: zod.string().email(),
+    age: zod.number(),
+    gender: zod.string(),
+    pronouns: zod.string(),
+    race: zod.string(),
+    school: zod.string(),
+    major: zod.string(),
+    level_of_study: zod.string(),
+    country_of_residence: zod.string(),
+    phonenumber: zod.string(),
+    question1: zod.string(),
+    question2: zod.string(),
+    tshirt_size: zod.string(),
+    dietary_restrictions: zod.array(zod.string()),
+    agree_conduct: zod.boolean(),
+    share_info: zod.boolean(),
+    resume_url: zod.string(),
+    receive_emails: zod.boolean(),
+    share_resume: zod.boolean(),
 });
 app.post('/submit-application', async (req, res) => {
     console.log('Post request to /submit-application');
@@ -470,7 +450,7 @@ app.post('/submit-application', async (req, res) => {
             user.application_status === 'Accepted') {
             res.status(400).json({
                 message: 'Application already submitted',
-                type: ServerError.ApplicationAlreadySubmitted,
+                type: "ApplicationAlreadySubmitted" /* ServerError.ApplicationAlreadySubmitted */,
             });
             return;
         }
@@ -479,7 +459,7 @@ app.post('/submit-application', async (req, res) => {
         if (!parsedBody.success) {
             res
                 .status(400)
-                .json({ message: 'Invalid request body', type: ServerError.Generic });
+                .json({ message: 'Invalid request body', type: "Generic" /* ServerError.Generic */ });
             return;
         }
         const requestBody = parsedBody.data;
@@ -533,10 +513,11 @@ app.post('/submit-application', async (req, res) => {
         await pool.query('ROLLBACK');
         res
             .status(500)
-            .json({ message: 'Internal server error', type: ServerError.Generic });
+            .json({ message: 'Internal server error', type: "Generic" /* ServerError.Generic */ });
         return;
     }
 });
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
+//# sourceMappingURL=index.js.map

@@ -2,7 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import zod from 'zod';
-import { Pool } from 'pg';
+import postGres from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
@@ -22,12 +22,11 @@ const userSchema = zod.object({
   email: zod.string().email(),
   name: zod.string(),
   password: zod.string(),
-  // TODO: This is never appended to the database???
   role: zod.string().optional(),
   application_status: zod.string().optional(),
 });
 // Error enum
-enum ServerError {
+const enum ServerError {
   Generic = 'Generic',
   UserExists = 'UserExists',
   InvalidCredentials = 'InvalidCredentials',
@@ -42,8 +41,7 @@ if (DB_URL == undefined) throw new Error('DB_URL is not defined');
 const JWT_SECRET = process.env.JWT_SECRET;
 if (JWT_SECRET == undefined) throw new Error('JWT_SECRET is not defined');
 // Connect to PostgreSQL
-// TODO: Use an orm for increased security
-const pool = new Pool({
+const pool = new postGres.Pool({
   connectionString: DB_URL,
   ssl: {
     rejectUnauthorized: true, // This disables certificate validation, which is fine for testing
@@ -51,6 +49,7 @@ const pool = new Pool({
 });
 // Setup Express
 const app = express();
+//@ts-ignore
 app.use(helmet());
 app.use(
   cors({
@@ -82,7 +81,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// TODO: It would be good if we applied this to to the object when signing for better round trips
 const jwtPayload = zod.object({
   id: zod.number(),
   role: zod.string(),
@@ -140,7 +138,6 @@ const getUser = async (
       user: rawUser.data,
     };
   } catch (err) {
-    // TODO: Make this type safe
     // @ts-ignore
     if (err.name === 'TokenExpiredError') {
       return {
@@ -172,7 +169,6 @@ const registerSchema = zod.object({
 });
 app.post('/register', async (req, res) => {
   console.log('Post request to /register');
-  // TODO: Use firebase auth so we do not need to worry about password security so much.
   // Safely extract the email and password from the request body
   const requestBody = await registerSchema.safeParseAsync(req.body);
   if (!requestBody.success) {
@@ -186,7 +182,6 @@ app.post('/register', async (req, res) => {
   try {
     await pool.query('BEGIN');
     // Ensure the user exists
-    // TODO: I think we should do this before the transaction as it does not cause mutation
     const userExist = await pool.query('SELECT * FROM users WHERE email = $1', [
       email,
     ]);
@@ -223,7 +218,6 @@ const loginSchema = zod.object({
 });
 app.post('/login', async (req, res) => {
   console.log('Post request to /login');
-  // TODO: Use firebase auth so we do not need to worry about password security so much.
   // Safely extract the email and password from the request body
   const requestBody = await loginSchema.safeParseAsync(req.body);
   if (!requestBody.success) {
@@ -247,7 +241,6 @@ app.post('/login', async (req, res) => {
       });
       return;
     }
-    // TODO: using an orm would be better
     const userTable = userResult.rows[0];
     const validUser = userSchema.safeParse(userTable);
     if (!validUser.success) {
@@ -358,7 +351,6 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
       return;
     }
     const requestBody = parsedBody.data;
-    // TODO: use a hash instead of the raw filename, collisions, data visibility
     const resume_url =
       req.file != undefined
         ? `http://localhost:5001/uploads/${req.file.filename}`
