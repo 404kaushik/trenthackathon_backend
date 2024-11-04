@@ -342,6 +342,17 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
       return;
     }
     const user = possibleUser.user;
+    // Prevent re-submission if the application status is already 'In Review' or 'Accepted'
+    if (
+      user.application_status === 'In Review' ||
+      user.application_status === 'Accepted'
+    ) {
+      res.status(400).json({
+        message: 'Application already submitted',
+        type: ServerError.ApplicationAlreadySubmitted,
+      });
+      return;
+    }
     // Get Body Data
     const parsedBody = await applySchema.safeParseAsync(req.body);
     if (!parsedBody.success) {
@@ -388,8 +399,15 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
         requestBody.share_resume,
       ]
     );
+     // Update the user's application status to 'In Review'
+     await pool.query('UPDATE users SET application_status = $1 WHERE id = $2', [
+      'In Review',
+      user.id,
+    ]);
+
+    // Send final response with success message and new application details
     res.status(201).json({
-      message: 'Application submitted',
+      message: 'Application submitted successfully',
       // TODO: We really should not be returning the application object, we could return needed information though
       application: newApplication.rows[0],
     });
@@ -432,121 +450,111 @@ app.get('/dashboard', async (req, res) => {
     return;
   }
 });
-// /submit-application - post request to submit an application
-const submitApplicationSchema = zod.object({
-  // TODO: Ensure types and improves restrictions
-  // TODO: What is the difference between this and apply???
-  first_name: zod.string(),
-  last_name: zod.string(),
-  email: zod.string().email(),
-  age: zod.number(),
-  gender: zod.string(),
-  pronouns: zod.string(),
-  race: zod.string(),
-  school: zod.string(),
-  major: zod.string(),
-  level_of_study: zod.string(),
-  country_of_residence: zod.string(),
-  phonenumber: zod.string(),
-  question1: zod.string(),
-  question2: zod.string(),
-  tshirt_size: zod.string(),
-  dietary_restrictions: zod.array(zod.string()),
-  agree_conduct: zod.boolean(),
-  share_info: zod.boolean(),
-  resume_url: zod.string(),
-  receive_emails: zod.boolean(),
-  share_resume: zod.boolean(),
-});
-app.post('/submit-application', async (req, res) => {
-  console.log('Post request to /submit-application');
-  try {
-    // Let's start a transaction for safety
-    await pool.query('BEGIN');
-    const possibleUser = await getUser(req.headers.authorization);
-    if (possibleUser.error) {
-      res.status(possibleUser.code).json(possibleUser);
-      return;
-    }
-    const user = possibleUser.user;
-    // Prevent re-submission if the application status is already 'In Review' or 'Accepted'
-    if (
-      user.application_status === 'In Review' ||
-      user.application_status === 'Accepted'
-    ) {
-      res.status(400).json({
-        message: 'Application already submitted',
-        type: ServerError.ApplicationAlreadySubmitted,
-      });
-      return;
-    }
-    // Write the application
-    const parsedBody = await submitApplicationSchema.safeParseAsync(req.body);
-    if (!parsedBody.success) {
-      res
-        .status(400)
-        .json({ message: 'Invalid request body', type: ServerError.Generic });
-      return;
-    }
-    const requestBody = parsedBody.data;
-    // Insert application into the database
-    const newApplication = await pool.query(
-      `INSERT INTO applications (
-        user_id, first_name, last_name, email, age, gender, pronouns, race, school, major, 
-        level_of_study, country_of_residence, phonenumber, question1, question2, tshirt_size, 
-        dietary_restrictions, agree_conduct, share_info, resume_url, receive_emails, share_resume
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
-      ) RETURNING *`,
-      [
-        user.id,
-        requestBody.first_name,
-        requestBody.last_name,
-        requestBody.email,
-        requestBody.age,
-        requestBody.gender,
-        requestBody.pronouns,
-        requestBody.race,
-        requestBody.school,
-        requestBody.major,
-        requestBody.level_of_study,
-        requestBody.country_of_residence,
-        requestBody.phonenumber,
-        requestBody.question1,
-        requestBody.question2,
-        requestBody.tshirt_size,
-        requestBody.dietary_restrictions.join(', '),
-        requestBody.agree_conduct,
-        requestBody.share_info,
-        requestBody.resume_url,
-        requestBody.receive_emails,
-        requestBody.share_resume,
-      ]
-    );
+// // /submit-application - post request to submit an application
+// const submitApplicationSchema = zod.object({
+//   // TODO: Ensure types and improves restrictions
+//   // TODO: What is the difference between this and apply???
+//   first_name: zod.string(),
+//   last_name: zod.string(),
+//   email: zod.string().email(),
+//   age: zod.number(),
+//   gender: zod.string(),
+//   pronouns: zod.string(),
+//   race: zod.string(),
+//   school: zod.string(),
+//   major: zod.string(),
+//   level_of_study: zod.string(),
+//   country_of_residence: zod.string(),
+//   phonenumber: zod.string(),
+//   question1: zod.string(),
+//   question2: zod.string(),
+//   tshirt_size: zod.string(),
+//   dietary_restrictions: zod.array(zod.string()),
+//   agree_conduct: zod.boolean(),
+//   share_info: zod.boolean(),
+//   resume_url: zod.string(),
+//   receive_emails: zod.boolean(),
+//   share_resume: zod.boolean(),
+// });
+// app.post('/submit-application', async (req, res) => {
+//   console.log('Post request to /submit-application');
+//   try {
+//     // Let's start a transaction for safety
+//     await pool.query('BEGIN');
+//     const possibleUser = await getUser(req.headers.authorization);
+//     if (possibleUser.error) {
+//       res.status(possibleUser.code).json(possibleUser);
+//       return;
+//     }
+//     const user = possibleUser.user;
+    
+//     // Write the application
+//     const parsedBody = await submitApplicationSchema.safeParseAsync(req.body);
+//     if (!parsedBody.success) {
+//       res
+//         .status(400)
+//         .json({ message: 'Invalid request body', type: ServerError.Generic });
+//       return;
+//     }
+//     const requestBody = parsedBody.data;
+//     // Insert application into the database
+//     const newApplication = await pool.query(
+//       `INSERT INTO applications (
+//         user_id, first_name, last_name, email, age, gender, pronouns, race, school, major, 
+//         level_of_study, country_of_residence, phonenumber, question1, question2, tshirt_size, 
+//         dietary_restrictions, agree_conduct, share_info, resume_url, receive_emails, share_resume
+//       ) VALUES (
+//         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+//       ) RETURNING *`,
+//       [
+//         user.id,
+//         requestBody.first_name,
+//         requestBody.last_name,
+//         requestBody.email,
+//         requestBody.age,
+//         requestBody.gender,
+//         requestBody.pronouns,
+//         requestBody.race,
+//         requestBody.school,
+//         requestBody.major,
+//         requestBody.level_of_study,
+//         requestBody.country_of_residence,
+//         requestBody.phonenumber,
+//         requestBody.question1,
+//         requestBody.question2,
+//         requestBody.tshirt_size,
+//         requestBody.dietary_restrictions.join(', '),
+//         requestBody.agree_conduct,
+//         requestBody.share_info,
+//         requestBody.resume_url,
+//         requestBody.receive_emails,
+//         requestBody.share_resume,
+//       ]
+//     );
 
-    // Update the user's application status to 'In Review'
-    await pool.query('UPDATE users SET application_status = $1 WHERE id = $2', [
-      'In Review',
-      user.id,
-    ]);
-    // Commit the transaction
-    await pool.query('COMMIT');
+//     // Update the user's application status to 'In Review'
+//     await pool.query('UPDATE users SET application_status = $1 WHERE id = $2', [
+//       'In Review',
+//       user.id,
+//     ]);
+//     // Commit the transaction
+//     await pool.query('COMMIT');
 
-    // Send final response with success message and new application details
-    res.status(201).json({
-      message: 'Application submitted successfully',
-      // TODO: We really should not be returning the application object, we could return needed information though
-      application: newApplication.rows[0],
-    });
-  } catch (_) {
-    // Rollback the transaction
-    await pool.query('ROLLBACK');
-    res
-      .status(500)
-      .json({ message: 'Internal server error', type: ServerError.Generic });
-    return;
-  }
-});
+//     // Send final response with success message and new application details
+//     res.status(201).json({
+//       message: 'Application submitted successfully',
+//       // TODO: We really should not be returning the application object, we could return needed information though
+//       application: newApplication.rows[0],
+//     });
+//   } catch (_) {
+//     // Rollback the transaction
+//     await pool.query('ROLLBACK');
+//     res
+//       .status(500)
+//       .json({ message: 'Internal server error', type: ServerError.Generic });
+//     return;
+//   }
+// });
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
